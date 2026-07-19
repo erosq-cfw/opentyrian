@@ -83,11 +83,22 @@ bool init_audio(void)
 
 	SDL_AudioSpec ask, got;
 
+#ifdef TARGET_EROSQ
+	// ES9018K2M DAC accepts only 44100/S16LE/stereo. Keep the mixer mono (the
+	// callback is mono) but ask at 44100 and forbid changes so SDL opens the
+	// DAC at its native format and converts mono->stereo for us.
+	ask.freq = 44100;
+	ask.format = AUDIO_S16SYS;
+	ask.channels = 1;
+	ask.samples = 512;
+	ask.callback = audioCallback;
+#else
 	ask.freq = 11025 * OUTPUT_QUALITY;
 	ask.format = AUDIO_S16SYS;
 	ask.channels = 1;
 	ask.samples = 256 * OUTPUT_QUALITY; // ~23 ms
 	ask.callback = audioCallback;
+#endif
 
 	if (SDL_InitSubSystem(SDL_INIT_AUDIO))
 	{
@@ -96,9 +107,13 @@ bool init_audio(void)
 		return false;
 	}
 
+#ifdef TARGET_EROSQ
+	int allowedChanges = 0;   // force SDL to give the DAC exactly 44100/S16/stereo
+#else
 	int allowedChanges = SDL_AUDIO_ALLOW_FREQUENCY_CHANGE;
 #if SDL_VERSION_ATLEAST(2, 0, 9)
 	allowedChanges |= SDL_AUDIO_ALLOW_SAMPLES_CHANGE;
+#endif
 #endif
 	audioDevice = SDL_OpenAudioDevice(/*device*/ NULL, /*iscapture*/ 0, &ask, &got, allowedChanges);
 
