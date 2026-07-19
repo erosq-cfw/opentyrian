@@ -260,7 +260,21 @@ bool load_opentyrian_config(void)
 	fullscreen_display = -1;
 	set_scaler_by_name("Scale2x");
 	memcpy(keySettings, defaultKeySettings, sizeof(keySettings));
-	
+
+#ifdef TARGET_EROSQ
+	// EROS Q control scheme: native (None) scaler; Play=fire(+both sidekicks),
+	// Menu=change-rear-weapon. Move maps to arrows in erosq_map_key.
+	set_scaler_by_name("None");
+	keySettings[KEY_SETTING_UP]            = SDL_SCANCODE_UP;
+	keySettings[KEY_SETTING_DOWN]          = SDL_SCANCODE_DOWN;
+	keySettings[KEY_SETTING_LEFT]          = SDL_SCANCODE_LEFT;
+	keySettings[KEY_SETTING_RIGHT]         = SDL_SCANCODE_RIGHT;
+	keySettings[KEY_SETTING_FIRE]          = SDL_SCANCODE_RETURN;
+	keySettings[KEY_SETTING_LEFT_SIDEKICK]  = SDL_SCANCODE_RETURN;
+	keySettings[KEY_SETTING_RIGHT_SIDEKICK] = SDL_SCANCODE_RETURN;
+	keySettings[KEY_SETTING_CHANGE_FIRE]   = SDL_SCANCODE_LCTRL;
+#endif
+
 	Config *config = &opentyrian_config;
 	
 	FILE *file = dir_fopen_warn(get_user_directory(), "opentyrian.cfg", "r");

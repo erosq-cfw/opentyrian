@@ -1,0 +1,62 @@
+#include "erosq_input.h"
+#include "erosq_keymap.h"
+#include "keyboard.h"      /* keysactive[] */
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <linux/input.h>   /* struct input_event, EV_KEY, EV_REL, REL_X */
+
+#define MAXFDS 10
+static int fds[MAXFDS];
+static int nfds;
+
+/* The scroll wheel emits EV_REL/REL_X ticks with no release event, so we fake
+ * a one-frame press: set the scancode this poll, clear it next poll. */
+static SDL_Scancode wheel_pulse = SDL_SCANCODE_UNKNOWN;
+
+void erosq_input_init(void)
+{
+	char path[32];
+	for (int i = 0; i < MAXFDS; ++i)
+	{
+		snprintf(path, sizeof path, "/dev/input/event%d", i);
+		int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+		if (fd >= 0)
+			fds[nfds++] = fd;
+	}
+}
+
+void erosq_input_poll(void)
+{
+	/* Release the previous frame's wheel pulse. ponytail: if a real d-pad key
+	 * shares this scancode and is held, it drops for one frame; harmless for
+	 * menu scrolling, revisit only if it bites in gameplay. */
+	if (wheel_pulse != SDL_SCANCODE_UNKNOWN)
+	{
+		keysactive[wheel_pulse] = false;
+		wheel_pulse = SDL_SCANCODE_UNKNOWN;
+	}
+
+	struct input_event ev;
+	for (int i = 0; i < nfds; ++i)
+	{
+		while (read(fds[i], &ev, sizeof ev) == (ssize_t)sizeof ev)
+		{
+			if (ev.type == EV_KEY)
+			{
+				if (ev.value == 2)   /* autorepeat */
+					continue;
+				SDL_Scancode sc = erosq_map_key(ev.code);
+				if (sc != SDL_SCANCODE_UNKNOWN)
+					keysactive[sc] = (ev.value != 0);
+			}
+			else if (ev.type == EV_REL && ev.code == REL_X)
+			{
+				SDL_Scancode sc = ev.value > 0 ? SDL_SCANCODE_DOWN : SDL_SCANCODE_UP;
+				keysactive[sc] = true;
+				wheel_pulse = sc;
+			}
+		}
+	}
+}

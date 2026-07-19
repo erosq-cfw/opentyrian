@@ -17,6 +17,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 #include "keyboard.h"
+#ifdef TARGET_EROSQ
+#include "erosq_input.h"
+#endif
 
 #include "joystick.h"
 #include "mouse.h"
@@ -76,12 +79,17 @@ static const Uint16 ucsMap[] =
 
 void init_keyboard(void)
 {
+#ifdef TARGET_EROSQ
+	erosq_input_init();
+	return;
+#else
 	SDL_StopTextInput();
 
 	SDL_ShowCursor(SDL_FALSE);
 
 #if SDL_VERSION_ATLEAST(2, 26, 0)
 	SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "1");
+#endif
 #endif
 }
 
@@ -178,6 +186,10 @@ void mouseGetRelativePosition(Sint32 *const out_x, Sint32 *const out_y)
 
 void handleSdlEvents(void)
 {
+#ifdef TARGET_EROSQ
+	erosq_input_poll();
+	return;
+#else
 	SDL_Event ev;
 
 	while (SDL_PollEvent(&ev))
@@ -368,6 +380,7 @@ void handleSdlEvents(void)
 				break;
 		}
 	}
+#endif
 }
 
 bool hasInput(InputFlags flags)
