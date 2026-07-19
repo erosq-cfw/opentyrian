@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <linux/input.h>   /* struct input_event, EV_KEY, EV_REL, REL_X */
 
 #define MAXFDS 10
@@ -25,6 +26,8 @@ void erosq_input_init(void)
 		if (fd >= 0)
 			fds[nfds++] = fd;
 	}
+	if (getenv("EROSQ_INDBG"))
+		fprintf(stderr, "erosq_input: opened %d event fds\n", nfds);
 }
 
 void erosq_input_poll(void)
@@ -43,6 +46,9 @@ void erosq_input_poll(void)
 	{
 		while (read(fds[i], &ev, sizeof ev) == (ssize_t)sizeof ev)
 		{
+			if (getenv("EROSQ_INDBG") && ev.type != EV_SYN)
+				fprintf(stderr, "erosq_input: fd%d type=%d code=%d val=%d -> sc=%d\n",
+				        i, ev.type, ev.code, ev.value, erosq_map_key(ev.code));
 			if (ev.type == EV_KEY)
 			{
 				if (ev.value == 2)   /* autorepeat */
