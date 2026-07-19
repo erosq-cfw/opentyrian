@@ -80,6 +80,10 @@ static const Uint16 ucsMap[] =
 void init_keyboard(void)
 {
 #ifdef TARGET_EROSQ
+	// No SDL window means no FOCUS_GAINED event, so windowHasFocus would stay
+	// false -> the release build auto-pauses gameplay every frame. We always
+	// own the panel, so we always have focus.
+	windowHasFocus = true;
 	erosq_input_init();
 	return;
 #else
