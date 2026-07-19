@@ -17,6 +17,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 #include "video.h"
+#ifdef TARGET_EROSQ
+#include "erosq_video.h"
+#endif
 
 #include "keyboard.h"
 #include "opentyr.h"
@@ -383,6 +386,11 @@ static void scale_and_flip(SDL_Surface *src_surface)
 {
 	assert(src_surface->format->BitsPerPixel == 8);
 
+#ifdef TARGET_EROSQ
+	// No SDL renderer on this device: expand palette -> RGB565 straight into
+	// the drm_out scanout (letterboxed 320x200 into 320x240).
+	erosq_present(src_surface);
+#else
 	// Do software scaling
 	assert(scaler_function != NULL);
 	scaler_function(src_surface, main_window_texture);
@@ -398,6 +406,32 @@ static void scale_and_flip(SDL_Surface *src_surface)
 
 	// Save output rect to be used by mouse functions
 	last_output_rect = dst_rect;
+#endif
+
+#ifdef SPIKE_BENCH
+	/* Headless RAM/fps spike: count presented frames, report fps periodically,
+	 * self-terminate after a fixed window so the run needs no external timeout. */
+	{
+		static Uint64 start_ms = 0, last_ms = 0;
+		static long frames = 0, win_frames = 0;
+		Uint64 now = SDL_GetTicks64();
+		if (start_ms == 0) { start_ms = last_ms = now; }
+		frames++; win_frames++;
+		if (now - last_ms >= 5000) {
+			fprintf(stderr, "SPIKE_FPS_5s=%.2f (total_frames=%ld)\n",
+			        win_frames * 1000.0 / (now - last_ms), frames);
+			fflush(stderr);
+			last_ms = now; win_frames = 0;
+		}
+		if (now - start_ms >= 25000) {
+			double secs = (now - start_ms) / 1000.0;
+			fprintf(stderr, "SPIKE_TOTAL_FRAMES=%ld\nSPIKE_AVG_FPS=%.2f\n",
+			        frames, frames / secs);
+			fflush(stderr);
+			exit(0);
+		}
+	}
+#endif
 }
 
 /** Maps a specified point in game screen coordinates to window coordinates. */
