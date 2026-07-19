@@ -19,6 +19,7 @@
 #include "video.h"
 #ifdef TARGET_EROSQ
 #include "erosq_video.h"
+#include "drm_out.h"
 #endif
 
 #include "keyboard.h"
@@ -66,6 +67,34 @@ static void scale_and_flip(SDL_Surface *);
 
 void init_video(void)
 {
+#ifdef TARGET_EROSQ
+	// No SDL video on this device: memory surfaces + drm_out scanout only.
+	static bool erosq_video_inited = false;
+	if (erosq_video_inited)
+		return;
+	erosq_video_inited = true;
+
+	VGAScreen = VGAScreenSeg = SDL_CreateRGBSurface(0, vga_width, vga_height, 8, 0, 0, 0, 0);
+	VGAScreen2 = SDL_CreateRGBSurface(0, vga_width, vga_height, 8, 0, 0, 0, 0);
+	game_screen = SDL_CreateRGBSurface(0, vga_width, vga_height, 8, 0, 0, 0, 0);
+
+	assert(!SDL_MUSTLOCK(VGAScreen));
+	assert(!SDL_MUSTLOCK(VGAScreen2));
+	assert(!SDL_MUSTLOCK(game_screen));
+
+	JE_clr256(VGAScreen);
+
+	if (drm_open() != 0)
+	{
+		// Do not swallow this: it means another DRM master (erosq-ui) holds the panel.
+		fprintf(stderr, "error: drm_open failed (is erosq-ui holding the panel?)\n");
+		exit(EXIT_FAILURE);
+	}
+
+	// RGB565 format makes palette.c's rgb_palette[] hold RGB565 words directly.
+	main_window_tex_format = SDL_AllocFormat(SDL_PIXELFORMAT_RGB565);
+	return;
+#else
 	if (SDL_WasInit(SDL_INIT_VIDEO))
 		return;
 
@@ -111,10 +140,23 @@ void init_video(void)
 	SDL_SetRenderDrawColor(main_window_renderer, 0, 0, 0, 255);
 	SDL_RenderClear(main_window_renderer);
 	SDL_RenderPresent(main_window_renderer);
+#endif
 }
 
 void deinit_video(void)
 {
+#ifdef TARGET_EROSQ
+	drm_close();
+	if (main_window_tex_format != NULL)
+	{
+		SDL_FreeFormat(main_window_tex_format);
+		main_window_tex_format = NULL;
+	}
+	SDL_FreeSurface(VGAScreenSeg);
+	SDL_FreeSurface(VGAScreen2);
+	SDL_FreeSurface(game_screen);
+	return;
+#else
 	deinit_texture();
 	deinit_renderer();
 
@@ -125,6 +167,7 @@ void deinit_video(void)
 	SDL_FreeSurface(game_screen);
 
 	SDL_QuitSubSystem(SDL_INIT_VIDEO);
+#endif
 }
 
 static void init_renderer(void)
@@ -200,6 +243,10 @@ static void window_center_in_display(int display_index)
 
 void reinit_fullscreen(int new_display)
 {
+#ifdef TARGET_EROSQ
+	(void)new_display;   // no window/fullscreen on this device
+	return;
+#else
 	fullscreen_display = new_display;
 
 	if (fullscreen_display >= SDL_GetNumVideoDisplays())
@@ -224,10 +271,14 @@ void reinit_fullscreen(int new_display)
 			return;
 		}
 	}
+#endif
 }
 
 void video_on_win_resize(void)
 {
+#ifdef TARGET_EROSQ
+	return;   // no resizable window on this device
+#else
 	int w, h;
 	int scaler_w, scaler_h;
 
@@ -245,18 +296,27 @@ void video_on_win_resize(void)
 
 		SDL_SetWindowSize(main_window, w, h);
 	}
+#endif
 }
 
 void toggle_fullscreen(void)
 {
+#ifdef TARGET_EROSQ
+	return;   // always "fullscreen" on the panel
+#else
 	if (fullscreen_display != -1)
 		reinit_fullscreen(-1);
 	else
 		reinit_fullscreen(SDL_GetWindowDisplayIndex(main_window));
+#endif
 }
 
 bool init_scaler(unsigned int new_scaler)
 {
+#ifdef TARGET_EROSQ
+	scaler = new_scaler;   // no texture/window on this device; present is native
+	return true;
+#else
 	int w = scalers[new_scaler].width,
 	    h = scalers[new_scaler].height;
 	int bpp = main_window_tex_format->BitsPerPixel; // TODOSDL2
@@ -294,6 +354,7 @@ bool init_scaler(unsigned int new_scaler)
 	}
 
 	return true;
+#endif
 }
 
 bool set_scaling_mode_by_name(const char *name)
