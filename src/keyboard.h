@@ -78,6 +78,13 @@ void mouseGetRelativePosition(Sint32 *out_x, Sint32 *out_y);
 
 void handleSdlEvents(void);
 
+#ifdef TARGET_EROSQ
+/* Feed a mapped key edge from the evdev reader into the same state SDL's
+ * KEYDOWN/KEYUP handlers maintain: keysactive[] (held; gameplay) plus the
+ * keyboardInputs ring buffer (edge; menu navigation via keyboardGetInput). */
+void erosq_feed_key(SDL_Scancode scancode, SDL_Keycode sym, bool down);
+#endif
+
 bool hasInput(InputFlags flags);
 bool getInput(void);
 

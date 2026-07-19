@@ -184,6 +184,35 @@ void mouseGetRelativePosition(Sint32 *const out_x, Sint32 *const out_y)
 	mouseWindowYRelative = 0;
 }
 
+#ifdef TARGET_EROSQ
+void erosq_feed_key(SDL_Scancode scancode, SDL_Keycode sym, bool down)
+{
+	if (scancode == SDL_SCANCODE_UNKNOWN)
+		return;
+
+	if (down)
+	{
+		keysactive[scancode] = true;
+
+		// Mirror the SDL_KEYDOWN push so menus (keyboardGetInput) see the edge.
+		if (keyboardInputsCount < COUNTOF(keyboardInputs))
+		{
+			KeyboardInput *const input = &keyboardInputs[keyboardInputsBack];
+			input->sym = sym;
+			input->scancode = scancode;
+			input->mod = KMOD_NONE;
+			input->ch = 0;
+			keyboardInputsBack = keyboardInputsBack == COUNTOF(keyboardInputs) - 1 ? 0 : keyboardInputsBack + 1;
+			keyboardInputsCount += 1;
+		}
+	}
+	else
+	{
+		keysactive[scancode] = false;
+	}
+}
+#endif
+
 void handleSdlEvents(void)
 {
 #ifdef TARGET_EROSQ

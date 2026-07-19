@@ -34,7 +34,7 @@ void erosq_input_poll(void)
 	 * menu scrolling, revisit only if it bites in gameplay. */
 	if (wheel_pulse != SDL_SCANCODE_UNKNOWN)
 	{
-		keysactive[wheel_pulse] = false;
+		erosq_feed_key(wheel_pulse, SDLK_UNKNOWN, false);
 		wheel_pulse = SDL_SCANCODE_UNKNOWN;
 	}
 
@@ -47,14 +47,14 @@ void erosq_input_poll(void)
 			{
 				if (ev.value == 2)   /* autorepeat */
 					continue;
-				SDL_Scancode sc = erosq_map_key(ev.code);
-				if (sc != SDL_SCANCODE_UNKNOWN)
-					keysactive[sc] = (ev.value != 0);
+				/* sym=UNKNOWN: menus/fire dispatch on scancode; sym is only
+				 * for typed cheat codes, which these buttons can't produce. */
+				erosq_feed_key(erosq_map_key(ev.code), SDLK_UNKNOWN, ev.value != 0);
 			}
 			else if (ev.type == EV_REL && ev.code == REL_X)
 			{
 				SDL_Scancode sc = ev.value > 0 ? SDL_SCANCODE_DOWN : SDL_SCANCODE_UP;
-				keysactive[sc] = true;
+				erosq_feed_key(sc, SDLK_UNKNOWN, true);
 				wheel_pulse = sc;
 			}
 		}
