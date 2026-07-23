@@ -16,6 +16,10 @@ static int nfds;
  * a one-frame press: set the scancode this poll, clear it next poll. */
 static SDL_Scancode wheel_pulse = SDL_SCANCODE_UNKNOWN;
 
+/* BT gamepad d-pad = ABS_HAT0X/Y (-1/0/+1); remember the held scancode per axis
+ * so we can release it when the axis returns to centre (or flips). */
+static SDL_Scancode hat_held[2] = { SDL_SCANCODE_UNKNOWN, SDL_SCANCODE_UNKNOWN };
+
 void erosq_input_init(void)
 {
 	char path[32];
@@ -62,6 +66,24 @@ void erosq_input_poll(void)
 				SDL_Scancode sc = ev.value > 0 ? SDL_SCANCODE_DOWN : SDL_SCANCODE_UP;
 				erosq_feed_key(sc, SDLK_UNKNOWN, true);
 				wheel_pulse = sc;
+			}
+			else if (ev.type == EV_ABS &&
+			         (ev.code == ABS_HAT0X || ev.code == ABS_HAT0Y))
+			{
+				int ax = (ev.code == ABS_HAT0Y);
+				SDL_Scancode want = SDL_SCANCODE_UNKNOWN;
+				if (ev.value < 0)
+					want = ax ? SDL_SCANCODE_UP   : SDL_SCANCODE_LEFT;
+				else if (ev.value > 0)
+					want = ax ? SDL_SCANCODE_DOWN : SDL_SCANCODE_RIGHT;
+				if (want != hat_held[ax])
+				{
+					if (hat_held[ax] != SDL_SCANCODE_UNKNOWN)
+						erosq_feed_key(hat_held[ax], SDLK_UNKNOWN, false);
+					if (want != SDL_SCANCODE_UNKNOWN)
+						erosq_feed_key(want, SDLK_UNKNOWN, true);
+					hat_held[ax] = want;
+				}
 			}
 		}
 	}
