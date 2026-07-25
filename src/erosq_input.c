@@ -6,11 +6,17 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <linux/input.h>   /* struct input_event, EV_KEY, EV_REL, REL_X */
 
+/* Slot i is /dev/input/eventi, or -1 if not open. Indexing by node number (not
+ * packing into an nfds count) is what lets a device come and go: a BT pad's node
+ * vanishes on disconnect and the kernel does NOT close our fd, it just fails
+ * with ENODEV forever, while the reconnect creates a new node at the same path.
+ * Without the reopen in the poll loop, unplugging the pad killed it until
+ * OpenTyrian was restarted. */
 #define MAXFDS 10
 static int fds[MAXFDS];
-static int nfds;
 
 /* The scroll wheel emits EV_REL/REL_X ticks with no release event, so we fake
  * a one-frame press: set the scancode this poll, clear it next poll. */
@@ -20,18 +26,25 @@ static SDL_Scancode wheel_pulse = SDL_SCANCODE_UNKNOWN;
  * so we can release it when the axis returns to centre (or flips). */
 static SDL_Scancode hat_held[2] = { SDL_SCANCODE_UNKNOWN, SDL_SCANCODE_UNKNOWN };
 
-void erosq_input_init(void)
+static void open_missing(void)
 {
 	char path[32];
 	for (int i = 0; i < MAXFDS; ++i)
 	{
+		if (fds[i] >= 0)
+			continue;
 		snprintf(path, sizeof path, "/dev/input/event%d", i);
-		int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-		if (fd >= 0)
-			fds[nfds++] = fd;
+		fds[i] = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+		if (fds[i] >= 0 && getenv("EROSQ_INDBG"))
+			fprintf(stderr, "erosq_input: opened event%d\n", i);
 	}
-	if (getenv("EROSQ_INDBG"))
-		fprintf(stderr, "erosq_input: opened %d event fds\n", nfds);
+}
+
+void erosq_input_init(void)
+{
+	for (int i = 0; i < MAXFDS; ++i)
+		fds[i] = -1;
+	open_missing();
 }
 
 void erosq_input_poll(void)
@@ -46,9 +59,13 @@ void erosq_input_poll(void)
 	}
 
 	struct input_event ev;
-	for (int i = 0; i < nfds; ++i)
+	static unsigned rescan;
+	for (int i = 0; i < MAXFDS; ++i)
 	{
-		while (read(fds[i], &ev, sizeof ev) == (ssize_t)sizeof ev)
+		ssize_t n;
+		if (fds[i] < 0)
+			continue;
+		while ((n = read(fds[i], &ev, sizeof ev)) == (ssize_t)sizeof ev)
 		{
 			if (getenv("EROSQ_INDBG") && ev.type != EV_SYN)
 				fprintf(stderr, "erosq_input: fd%d type=%d code=%d val=%d -> sc=%d\n",
@@ -86,5 +103,13 @@ void erosq_input_poll(void)
 				}
 			}
 		}
+		if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+		{
+			close(fds[i]);       /* device went away (ENODEV) */
+			fds[i] = -1;
+		}
 	}
+	/* ~1s at any sane frame rate; probing 10 paths every frame would be silly */
+	if ((++rescan & 63) == 0)
+		open_missing();
 }
