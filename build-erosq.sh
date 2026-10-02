@@ -7,7 +7,7 @@
 #   ./build-erosq.sh bench    -> same + SPIKE_BENCH (auto-demo, self-exit) smoke build
 set -e
 
-BR=${BR:-buildroot-2026.05}
+BR=${BR:-buildroot-2026.08}
 CC="$BR/output/host/bin/mipsel-buildroot-linux-musl-gcc"
 PKG="$BR/output/host/bin/pkg-config"
 STRIP="$BR/output/host/bin/mipsel-buildroot-linux-musl-strip"
